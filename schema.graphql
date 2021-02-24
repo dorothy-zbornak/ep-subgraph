@@ -1,5 +1,127 @@
-type ExampleEntity @entity {
-  id: ID!
-  block: Bytes!
-  transaction: Bytes!
+enum FillSource {
+    Unknown
+    LimitOrder
+    RfqOrder
+    Balancer
+    Bancor
+    CoFiX
+    Curve
+    Cream
+    CryptoCom
+    Dodo
+    Kyber
+    LiquidityProvider
+    Mooniswap
+    MStable
+    Oasis
+    Shell
+    Snowswap
+    Sushiswap
+    Swerve
+    Uniswap
+    UniswapV2
+    Dodov2
+    Linkswap
+}
+
+enum SwapMethod {
+    TransformERC20
+    UniswapVIP
+    LiquidityProvider
+}
+
+enum NativeOrderType {
+    RfqOrder
+    LimitOrder
+}
+
+type Transaction @entity {
+    # tx hash
+    id: ID!
+    blockNumber: BigInt!
+    timestamp: BigInt!
+    fills: [Fill!]!
+    nativeOrderFills: [NativeOrderFill!]!
+    swaps: [Swap!]!
+}
+
+type Token @entity {
+    # token address
+    id: ID!
+    symbol: String!
+    decimals: BigInt!
+    rfqOrderVolume: BigInt!
+    limitOrderVolume: BigInt!
+    swapVolume: BigInt!
+}
+
+type Taker @entity {
+    # taker address
+    id: ID!
+    swapCount: BigInt!
+    nativeOrderFillCount: BigInt!
+    swaps: [Swap!]!
+    nativeOrderFills: [NativeOrderFill!]!
+}
+
+type Maker @entity {
+    # maker address
+    id: ID!
+    nativeOrderFillCount: BigInt!
+    nativeOrderFills: [NativeOrderFill!]!
+}
+
+type Fill @entity {
+    # tx hash - source - log index
+    id: ID!
+    blockNumber: BigInt!
+    transaction: Transaction!
+    logIndex: BigInt
+    source: FillSource!
+    recipient: Bytes!
+    # For native order fills this is the maker.
+    # For liquidity provider fills this is the provider address.
+    provider: Bytes
+    sender: Bytes
+    inputToken: Token!
+    outputToken: Token!
+    inputTokenAmount: BigInt!
+    outputTokenAmount: BigInt!
+}
+
+type NativeOrderFill @entity {
+    # tx hash - order hash - log index
+    id: ID!
+    transaction: Transaction!
+    blockNumber: BigInt!
+    type: NativeOrderType!
+    orderHash: Bytes!
+    taker: Taker!
+    maker: Maker!
+    inputToken: Token!
+    outputToken: Token!
+    inputTokenAmount: BigInt!
+    outputTokenAmount: BigInt!
+    pool: Bytes!
+    fee: BigInt!
+}
+
+type Swap @entity {
+    # tx hash - tx swap #
+    id: ID!
+    blockNumber: BigInt!
+    transaction: Transaction!
+    logIndex: BigInt
+    method: SwapMethod!
+    # For multi-hop Uniswap VIP fills (A->B->C) this will be collapsed into a
+    # single A->C fill.
+    fills: [Fill!]!
+    inputToken: Token!
+    outputToken: Token!
+    inputTokenAmount: BigInt!
+    outputTokenAmount: BigInt!
+    taker: Taker!
+    # For uniswap VIP swaps this is either 'Sushiswap' or 'UniswapV2'.
+    # For LiquidityProvider VIP swaps this is the provider address.
+    hint: String
 }

@@ -1,22 +1,103 @@
-specVersion: 0.0.1
+specVersion: 0.0.2
+description: 0x ExchangeProxy
+repository: https://github.com/0xProject/0x-exchange-proxy-subgraph
 schema:
-  file: ./schema.graphql
+    file: ./schema.graphql
 dataSources:
-  - kind: ethereum/contract
-    name: Contract
-    network: mainnet
-    source:
-      address: "0xdef1c0ded9bec7f1a1670819833240f027b25eff"
-      abi: Contract
-    mapping:
-      kind: ethereum/events
-      apiVersion: 0.0.2
-      language: wasm/assemblyscript
-      entities:
-
-      abis:
-        - name: Contract
-          file: ./abis/Contract.json
-      eventHandlers:
-
-      file: ./src/mapping.ts
+    - kind: ethereum/contract
+      name: Transformers
+      network: mainnet
+      source:
+          abi: TransformerEvents
+          startBlock: 11861700
+      mapping:
+          kind: ethereum/events
+          apiVersion: 0.0.4
+          language: wasm/assemblyscript
+          entities:
+              - Transaction
+              - Token
+              - Fill
+              - Taker
+          abis:
+              - name: TransformerEvents
+                file: ./abis/TransformerEvents.json
+              - name: IZeroEx
+                file: ./abis/IZeroEx.json
+              - name: ERC20
+                file: ./abis/ERC20.json
+              - name: ERC20SymbolBytes
+                file: ./abis/ERC20SymbolBytes.json
+          eventHandlers:
+              - event: BridgeFill(uint256,address,address,uint256,uint256)
+                handler: handleBridgeFillEvent
+          file: ./src/mappings/transformers.ts
+    - kind: ethereum/contract
+      name: ExchangeProxy
+      network: mainnet
+      source:
+          address: '0xdef1c0ded9bec7f1a1670819833240f027b25eff'
+          abi: IZeroEx
+          startBlock: 11861700
+      mapping:
+          kind: ethereum/events
+          apiVersion: 0.0.4
+          language: wasm/assemblyscript
+          entities:
+              - Transaction
+              - Token
+              - Fill
+              - Taker
+              - SwapSummary
+              - NativeOrderFill
+              - Swap
+          abis:
+              - name: IZeroEx
+                file: ./abis/IZeroEx.json
+              - name: ERC20
+                file: ./abis/ERC20.json
+              - name: ERC20SymbolBytes
+                file: ./abis/ERC20SymbolBytes.json
+          eventHandlers:
+              - event: RfqOrderFilled(bytes32,address,address,address,address,uint128,uint128,bytes32)
+                handler: handleRfqOrderFilledEvent
+              - event: LimitOrderFilled(bytes32,address,address,address,address,address,uint128,uint128,uint128,uint256,bytes32)
+                handler: handleLimitOrderFilledEvent
+              - event: TransformedERC20(indexed address,address,address,uint256,uint256)
+                handler: handleTransformedERC20Event
+              - event: LiquidityProviderSwap(address,address,uint256,uint256,address,address)
+                handler: handleSellToLiquidityProviderSwapEvent
+          callHandlers:
+              - function: sellToUniswap(address[],uint256,uint256,bool)
+                handler: handleSellToUniswapCall
+          file: ./src/mappings/exchange-proxy.ts
+    - kind: ethereum/contract
+      name: Uniswap
+      network: mainnet
+      source:
+          abi: UniswapPair
+          startBlock: 11861700
+      mapping:
+          kind: ethereum/events
+          apiVersion: 0.0.4
+          language: wasm/assemblyscript
+          entities:
+              - Fill
+              - Token
+              - Transaction
+              - Taker
+          abis:
+              - name: UniswapPair
+                file: ./abis/UniswapPair.json
+              - name: UniswapPairFactory
+                file: ./abis/UniswapPairFactory.json
+              - name: IZeroEx
+                file: ./abis/IZeroEx.json
+              - name: ERC20
+                file: ./abis/ERC20.json
+              - name: ERC20SymbolBytes
+                file: ./abis/ERC20SymbolBytes.json
+          eventHandlers:
+              - event: Swap(indexed address,uint256,uint256,uint256,uint256,indexed address)
+                handler: handleUniswapSwap
+          file: ./src/mappings/uniswap.ts
