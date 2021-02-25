@@ -365,12 +365,12 @@ function findSellToUniswapEventFills(tx: Transaction, call: SellToUniswapCall): 
         }
     }
     // Couldn't find a single A->B fill. Maybe it's a multi-hop. Try to find
-    // the A->X and X->B fills and merge them into a single fake A->B fill.
+    // the A->X and X->B fills and grab everything inbetween.
     for (let i = 0; i < fills.length - 1; ++i) {
         if (fills[i].inputToken == inputToken) {
             for (let j = i + 1; j < fills.length; ++j) {
                 if (fills[j].outputToken == outputToken) {
-                    return [mergeUniswapV2Fills(fills[i], fills[j])];
+                    return fills.slice(i, j + 1);
                 }
             }
         }
@@ -411,22 +411,4 @@ export function findSwapEventFills(tx: Transaction, logIndex: BigInt | null = nu
         fills.push(fill!);
     }
     return fills;
-}
-
-
-// Merge A->X and X->B fills into a single A->B fill.
-function mergeUniswapV2Fills(a: Fill, b: Fill): Fill {
-    let fill = new Fill(a.id + b.id);
-    fill.transaction = a.transaction;
-    fill.blockNumber = a.blockNumber;
-    fill.logIndex = b.logIndex;
-    fill.source = a.source;
-    fill.recipient = b.recipient;
-    fill.sender = a.sender;
-    fill.inputToken = a.inputToken;
-    fill.outputToken = b.outputToken;
-    fill.inputTokenAmount = a.inputTokenAmount;
-    fill.outputTokenAmount = b.outputTokenAmount;
-    fill.save();
-    return fill;
 }

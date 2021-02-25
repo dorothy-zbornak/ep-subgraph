@@ -81,6 +81,7 @@ type Fill @entity {
     recipient: Bytes!
     # For native order fills this is the maker.
     # For liquidity provider fills this is the provider address.
+    # For bridge fills this is the source ID.
     provider: Bytes
     sender: Bytes
     inputToken: Token!
@@ -113,8 +114,6 @@ type Swap @entity {
     transaction: Transaction!
     logIndex: BigInt
     method: SwapMethod!
-    # For multi-hop Uniswap VIP fills (A->B->C) this will be collapsed into a
-    # single A->C fill.
     fills: [Fill!]!
     inputToken: Token!
     outputToken: Token!
