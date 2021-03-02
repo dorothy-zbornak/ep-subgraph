@@ -1,4 +1,4 @@
-import { BigInt, Bytes, crypto, log } from '@graphprotocol/graph-ts';
+import { BigInt, Bytes, log } from '@graphprotocol/graph-ts';
 import {
     LimitOrderFilled,
     LiquidityProviderSwap,
@@ -10,9 +10,10 @@ import { Fill, NativeOrderFill, Swap, Transaction } from '../../generated/schema
 import {
     EXCHANGE_PROXY_ADDRESS,
     fillsToIds,
-    getFlashWallet,
+    FLASH_WALLET_ADDRESS,
     makerFindOrCreate,
     normalizeTokenAddress,
+    SANDBOX_ADDRESS,
     takerFindOrCreate,
     tokenFindOrCreate,
     transactionFindOrCreate,
@@ -74,26 +75,31 @@ export function handleSellToLiquidityProviderSwapEvent(event: LiquidityProviderS
     outputToken.save();
 
     // TODO: Capture LP events as fills instead of making a fake one?
-    let fill = new Fill(tx.id + '-' + event.params.provider.toHexString() + '-' + event.logIndex.toString());
-    fill.transaction = tx.id;
-    fill.blockNumber = tx.blockNumber;
-    fill.logIndex = event.logIndex;
-    fill.source = 'LiquidityProvider';
-    fill.recipient = event.params.recipient as Bytes;
-    fill.provider = event.params.provider as Bytes;
-    fill.sender = EXCHANGE_PROXY_ADDRESS;
-    fill.inputToken = inputToken.id;
-    fill.outputToken = outputToken.id;
-    fill.inputTokenAmount = event.params.inputTokenAmount;
-    fill.outputTokenAmount = event.params.outputTokenAmount;
-    fill.save();
+    let fills = findLiquidityProviderFills(tx, event.logIndex);
+    if (fills.length === 0) {
+        // If no fill event was found, create a fake one.
+        let fill = new Fill(tx.id + '-' + event.params.provider.toHexString() + '-' + event.logIndex.toString());
+        fill.transaction = tx.id;
+        fill.blockNumber = tx.blockNumber;
+        fill.logIndex = event.logIndex;
+        fill.source = 'LiquidityProvider';
+        fill.recipient = event.params.recipient as Bytes;
+        fill.provider = event.params.provider as Bytes;
+        fill.sender = EXCHANGE_PROXY_ADDRESS;
+        fill.inputToken = inputToken.id;
+        fill.outputToken = outputToken.id;
+        fill.inputTokenAmount = event.params.inputTokenAmount;
+        fill.outputTokenAmount = event.params.outputTokenAmount;
+        fill.save();
+        fills = [fill];
+    }
 
     let swap = new Swap(tx.id + '-' + BigInt.fromI32(tx.swaps.length).toString());
     swap.transaction = tx.id;
     swap.blockNumber = tx.blockNumber;
     swap.logIndex = event.logIndex;
     swap.method = 'LiquidityProvider';
-    swap.fills = fillsToIds([fill]);
+    swap.fills = fillsToIds(fills);
     swap.inputToken = inputToken.id;
     swap.outputToken = outputToken.id;
     swap.inputTokenAmount = event.params.inputTokenAmount;
@@ -312,28 +318,48 @@ export function handleSellToUniswapCall(call: SellToUniswapCall): void {
 }
 
 function findTransformERC20Fills(tx: Transaction, logIndex: BigInt): Fill[] {
-    let flashWallet = getFlashWallet();
-    if (!flashWallet) {
-        return []; // No flash wallet, no TransformERC20 fills.
-    }
     let fills = findSwapEventFills(tx, logIndex);
     const r = [] as Fill[];
     for (let i = 0; i < fills.length; ++i) {
         // Flash wallet must be recipient.
-        if (fills[i].recipient != flashWallet as Bytes) {
+        if (fills[i].recipient != FLASH_WALLET_ADDRESS as Bytes) {
             continue;
         }
-        // If there is a sender, the flash wallet must be it.
+        // If there is a sender, the EP must be it.
         // (native fills will not populate sender).
         if (fills[i].sender) { // Don't ask me why these two can't be in the same if()
-            if (fills[i].sender as Bytes != flashWallet as Bytes) {
+            if (fills[i].sender as Bytes != EXCHANGE_PROXY_ADDRESS as Bytes) {
                 continue;
             }
         }
         r.push(fills[i]);
     }
     if (r.length === 0) {
-        log.warning('could not find TransformERC20 fills for tx {}', [tx.id]);
+        log.warning('could not find transformERC20 fills for tx {}', [tx.id]);
+    }
+    return r;
+}
+
+function findLiquidityProviderFills(tx: Transaction, logIndex: BigInt): Fill[] {
+    let fills = findSwapEventFills(tx, logIndex);
+    const r = [] as Fill[];
+    for (let i = 0; i < fills.length; ++i) {
+        // Must contain "LiquidityProviderFill" in ID.
+        if (fills[i].id.indexOf('LiquidityProviderFill') === -1) {
+            continue;
+        }
+        // There must be a sender.
+        if (!fills[i].sender) {
+            continue;
+        }
+        // The sandbox must be the sender.
+        if (fills[i].sender as Bytes == SANDBOX_ADDRESS as Bytes) {
+            continue;
+        }
+        r.push(fills[i]);
+    }
+    if (r.length === 0) {
+        log.warning('could not find sellToLiquidityProvider fills for tx {}', [tx.id]);
     }
     return r;
 }

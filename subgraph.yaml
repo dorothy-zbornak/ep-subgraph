@@ -9,7 +9,7 @@ dataSources:
       network: mainnet
       source:
           abi: TransformerEvents
-          startBlock: 11861700
+          startBlock: 11565019
       mapping:
           kind: ethereum/events
           apiVersion: 0.0.4
@@ -18,27 +18,53 @@ dataSources:
               - Transaction
               - Token
               - Fill
-              - Taker
           abis:
               - name: TransformerEvents
                 file: ./abis/TransformerEvents.json
-              - name: IZeroEx
-                file: ./abis/IZeroEx.json
               - name: ERC20
                 file: ./abis/ERC20.json
               - name: ERC20SymbolBytes
                 file: ./abis/ERC20SymbolBytes.json
           eventHandlers:
               - event: BridgeFill(uint256,address,address,uint256,uint256)
+                handler: handleLegacyBridgeFillEvent
+              - event: BridgeFill(bytes32,address,address,uint256,uint256)
                 handler: handleBridgeFillEvent
+              - event: ERC20BridgeTransfer(address,address,uint256,uint256,address,address)
+                handler: handleERC20BridgeTransferEvent
           file: ./src/mappings/transformers.ts
+    - kind: ethereum/contract
+      name: LiquidityProviders
+      network: mainnet
+      source:
+          abi: ILiquidityProvider
+          startBlock: 11565019
+      mapping:
+          kind: ethereum/events
+          apiVersion: 0.0.4
+          language: wasm/assemblyscript
+          entities:
+              - Transaction
+              - Token
+              - Fill
+          abis:
+              - name: ILiquidityProvider
+                file: ./abis/ILiquidityProvider.json
+              - name: ERC20
+                file: ./abis/ERC20.json
+              - name: ERC20SymbolBytes
+                file: ./abis/ERC20SymbolBytes.json
+          eventHandlers:
+              - event: LiquidityProviderFill(address,address,uint256,uint256,bytes32,address,address,address)
+                handler: handleLiquidityProviderFillEvent
+          file: ./src/mappings/lps.ts
     - kind: ethereum/contract
       name: ExchangeProxy
       network: mainnet
       source:
           address: '0xdef1c0ded9bec7f1a1670819833240f027b25eff'
           abi: IZeroEx
-          startBlock: 11861700
+          startBlock: 11565019
       mapping:
           kind: ethereum/events
           apiVersion: 0.0.4
@@ -67,16 +93,13 @@ dataSources:
                 handler: handleTransformedERC20Event
               - event: LiquidityProviderSwap(address,address,uint256,uint256,address,address)
                 handler: handleSellToLiquidityProviderSwapEvent
-          callHandlers:
-              - function: sellToUniswap(address[],uint256,uint256,bool)
-                handler: handleSellToUniswapCall
           file: ./src/mappings/exchange-proxy.ts
     - kind: ethereum/contract
       name: Uniswap
       network: mainnet
       source:
           abi: UniswapPair
-          startBlock: 11861700
+          startBlock: 11565019
       mapping:
           kind: ethereum/events
           apiVersion: 0.0.4
@@ -91,8 +114,6 @@ dataSources:
                 file: ./abis/UniswapPair.json
               - name: UniswapPairFactory
                 file: ./abis/UniswapPairFactory.json
-              - name: IZeroEx
-                file: ./abis/IZeroEx.json
               - name: ERC20
                 file: ./abis/ERC20.json
               - name: ERC20SymbolBytes
