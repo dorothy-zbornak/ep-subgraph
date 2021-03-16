@@ -86,6 +86,23 @@ export class Transaction extends Entity {
   set swaps(value: Array<string>) {
     this.set("swaps", Value.fromStringArray(value));
   }
+
+  get lastSwap(): string | null {
+    let value = this.get("lastSwap");
+    if (value === null || value.kind == ValueKind.NULL) {
+      return null;
+    } else {
+      return value.toString();
+    }
+  }
+
+  set lastSwap(value: string | null) {
+    if (value === null) {
+      this.unset("lastSwap");
+    } else {
+      this.set("lastSwap", Value.fromString(value as string));
+    }
+  }
 }
 
 export class Token extends Entity {

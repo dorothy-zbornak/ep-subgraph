@@ -1,7 +1,9 @@
 import { BigInt, Bytes, log } from '@graphprotocol/graph-ts';
 import {
+    BatchFillCall,
     LimitOrderFilled,
     LiquidityProviderSwap,
+    MultiHopFillCall,
     RfqOrderFilled,
     SellToUniswapCall,
     TransformedERC20
@@ -11,6 +13,7 @@ import {
     EXCHANGE_PROXY_ADDRESS,
     fillsToIds,
     FLASH_WALLET_ADDRESS,
+    getRandomNumber,
     makerFindOrCreate,
     normalizeTokenAddress,
     SANDBOX_ADDRESS,
@@ -20,6 +23,7 @@ import {
 } from '../utils';
 
 export function handleTransformedERC20Event(event: TransformedERC20): void {
+    log.debug('found transformERC20 swap in tx {}', [event.transaction.hash.toHex()]);
     let tx = transactionFindOrCreate(event.transaction.hash, event.block);
     let taker = takerFindOrCreate(event.params.taker);
 
@@ -32,7 +36,7 @@ export function handleTransformedERC20Event(event: TransformedERC20): void {
     inputToken.save();
     outputToken.save();
 
-    let swap = new Swap(tx.id + '-' + BigInt.fromI32(tx.swaps.length).toString());
+    let swap = new Swap(tx.id + '-' + event.logIndex.toString());
     swap.transaction = tx.id;
     swap.blockNumber = tx.blockNumber;
     swap.logIndex = event.logIndex;
@@ -46,22 +50,18 @@ export function handleTransformedERC20Event(event: TransformedERC20): void {
     swap.save();
 
     {
-        let takerSwaps = taker.swaps;
-        takerSwaps.push(swap.id);
-        taker.swaps = takerSwaps;
         taker.swapCount = taker.swapCount.plus(BigInt.fromI32(1));
         taker.save();
     }
 
     {
-        let txSwaps = tx.swaps;
-        txSwaps.push(swap.id);
-        tx.swaps = txSwaps;
+        tx.lastSwap = swap.id;
         tx.save();
     }
 }
 
 export function handleSellToLiquidityProviderSwapEvent(event: LiquidityProviderSwap): void {
+    log.debug('found sellToLiquidityProvider swap in tx {}', [event.transaction.hash.toHex()]);
     let tx = transactionFindOrCreate(event.transaction.hash, event.block);
     let taker = takerFindOrCreate(event.params.recipient); // sus
 
@@ -92,9 +92,14 @@ export function handleSellToLiquidityProviderSwapEvent(event: LiquidityProviderS
         fill.outputTokenAmount = event.params.outputTokenAmount;
         fill.save();
         fills = [fill];
+        {
+            let txFills = tx.fills;
+            txFills.push(fill.id);
+            tx.fills = txFills;
+        }
     }
 
-    let swap = new Swap(tx.id + '-' + BigInt.fromI32(tx.swaps.length).toString());
+    let swap = new Swap(tx.id + '-' + event.logIndex.toString());
     swap.transaction = tx.id;
     swap.blockNumber = tx.blockNumber;
     swap.logIndex = event.logIndex;
@@ -109,17 +114,12 @@ export function handleSellToLiquidityProviderSwapEvent(event: LiquidityProviderS
     swap.save();
 
     {
-        let takerSwaps = taker.swaps;
-        takerSwaps.push(swap.id);
-        taker.swaps = takerSwaps;
         taker.swapCount = taker.swapCount.plus(BigInt.fromI32(1));
         taker.save();
     }
 
     {
-        let txSwaps = tx.swaps;
-        txSwaps.push(swap.id);
-        tx.swaps = txSwaps;
+        tx.lastSwap = swap.id;
         tx.save();
     }
 }
@@ -169,17 +169,11 @@ export function handleRfqOrderFilledEvent(event: RfqOrderFilled): void {
     nativeFill.save();
 
     {
-        let makerNativeOrderFills = maker.nativeOrderFills;
-        makerNativeOrderFills.push(nativeFill.id);
-        maker.nativeOrderFills = makerNativeOrderFills;
         maker.nativeOrderFillCount = maker.nativeOrderFillCount.plus(BigInt.fromI32(1));
         maker.save();
     }
 
     {
-        let takerNativeOrderFills = taker.nativeOrderFills;
-        takerNativeOrderFills.push(nativeFill.id);
-        taker.nativeOrderFills = takerNativeOrderFills;
         taker.nativeOrderFillCount = taker.nativeOrderFillCount.plus(BigInt.fromI32(1));
         taker.save();
     }
@@ -188,9 +182,6 @@ export function handleRfqOrderFilledEvent(event: RfqOrderFilled): void {
         let txFills = tx.fills;
         txFills.push(fill.id);
         tx.fills = txFills;
-        let txNativeFills = tx.nativeOrderFills;
-        txNativeFills.push(nativeFill.id);
-        tx.nativeOrderFills = txNativeFills;
         tx.save();
     }
 }
@@ -240,17 +231,11 @@ export function handleLimitOrderFilledEvent(event: LimitOrderFilled): void {
     nativeFill.save();
 
     {
-        let makerNativeOrderFills = maker.nativeOrderFills;
-        makerNativeOrderFills.push(nativeFill.id);
-        maker.nativeOrderFills = makerNativeOrderFills;
         maker.nativeOrderFillCount = maker.nativeOrderFillCount.plus(BigInt.fromI32(1));
         maker.save();
     }
 
     {
-        let takerNativeOrderFills = taker.nativeOrderFills;
-        takerNativeOrderFills.push(nativeFill.id);
-        taker.nativeOrderFills = takerNativeOrderFills;
         taker.nativeOrderFillCount = taker.nativeOrderFillCount.plus(BigInt.fromI32(1));
         taker.save();
     }
@@ -259,15 +244,14 @@ export function handleLimitOrderFilledEvent(event: LimitOrderFilled): void {
         let txFills = tx.fills;
         txFills.push(fill.id);
         tx.fills = txFills;
-        let txNativeFills = tx.nativeOrderFills;
-        txNativeFills.push(nativeFill.id);
-        tx.nativeOrderFills = txNativeFills;
         tx.save();
     }
 }
 
 export function handleSellToUniswapCall(call: SellToUniswapCall): void {
+    log.debug('found sellToUniswap swap in tx {}', [call.transaction.hash.toHex()]);
     let tokenPath = call.inputs.tokens;
+
     if (tokenPath.length < 2) {
         return;
     }
@@ -280,7 +264,6 @@ export function handleSellToUniswapCall(call: SellToUniswapCall): void {
     }
     let taker = takerFindOrCreate(call.from);
 
-
     let inputToken = tokenFindOrCreate(tokenPath[0]);
     let outputToken = tokenFindOrCreate(tokenPath[tokenPath.length - 1]);
     inputToken.swapVolume = inputToken.swapVolume.plus(call.inputs.sellAmount);
@@ -288,7 +271,8 @@ export function handleSellToUniswapCall(call: SellToUniswapCall): void {
     inputToken.save();
     outputToken.save();
 
-    let swap = new Swap(tx.id + '-' + BigInt.fromI32(tx.swaps.length).toString());
+    let r = getRandomNumber();
+    let swap = new Swap(tx.id + '-' + r.toString());
     swap.transaction = tx.id;
     swap.blockNumber = tx.blockNumber;
     swap.method = 'UniswapVIP';
@@ -302,17 +286,92 @@ export function handleSellToUniswapCall(call: SellToUniswapCall): void {
     swap.save();
 
     {
-        let takerSwaps = taker.swaps;
-        takerSwaps.push(swap.id);
-        taker.swaps = takerSwaps;
         taker.swapCount = taker.swapCount.plus(BigInt.fromI32(1));
         taker.save();
     }
 
     {
-        let txSwaps = tx.swaps;
-        txSwaps.push(swap.id);
-        tx.swaps = txSwaps;
+        tx.lastSwap = swap.id;
+        tx.save();
+    }
+}
+
+export function handleBatchFillCall(call: BatchFillCall): void {
+    log.debug('found batchFill swap in tx {}', [call.transaction.hash.toHex()]);
+    let taker = takerFindOrCreate(call.from);
+    let fillData = call.inputs.fillData;
+    let inputToken = tokenFindOrCreate(fillData.inputToken);
+    let outputToken = tokenFindOrCreate(fillData.outputToken);
+
+    let tx = transactionFindOrCreate(call.transaction.hash, call.block);
+    let fills = findSwapEventFills(tx); // sus
+    inputToken.swapVolume = inputToken.swapVolume.plus(fillData.sellAmount);
+    outputToken.swapVolume = outputToken.swapVolume.plus(call.outputs.outputTokenAmount);
+    inputToken.save();
+    outputToken.save();
+
+    let r = getRandomNumber();
+    let swap = new Swap(tx.id + '-' + r.toString());
+    swap.transaction = tx.id;
+    swap.blockNumber = tx.blockNumber;
+    swap.method = 'BatchFill';
+    swap.fills = fillsToIds(fills);
+    swap.inputToken = inputToken.id;
+    swap.outputToken = outputToken.id;
+    swap.inputTokenAmount = fillData.sellAmount;
+    swap.outputTokenAmount = call.outputs.outputTokenAmount;
+    swap.taker = taker.id;
+    swap.save();
+
+    {
+        taker.swapCount = taker.swapCount.plus(BigInt.fromI32(1));
+        taker.save();
+    }
+
+    {
+        tx.lastSwap = swap.id;
+        tx.save();
+    }
+}
+
+export function handleMultiHopFillCall(call: MultiHopFillCall): void {
+    log.debug('found multiHopFill swap in tx {}', [call.transaction.hash.toHex()]);
+    let taker = takerFindOrCreate(call.from);
+    let fillData = call.inputs.fillData;
+    let tokens = fillData.tokens;
+    if (tokens.length < 2) {
+        return;
+    }
+    let inputToken = tokenFindOrCreate(tokens[0]);
+    let outputToken = tokenFindOrCreate(tokens[tokens.length - 1]);
+
+    let tx = transactionFindOrCreate(call.transaction.hash, call.block);
+    let fills = findSwapEventFills(tx); // sus
+    inputToken.swapVolume = inputToken.swapVolume.plus(fillData.sellAmount);
+    outputToken.swapVolume = outputToken.swapVolume.plus(call.outputs.outputTokenAmount);
+    inputToken.save();
+    outputToken.save();
+
+    let r = getRandomNumber();
+    let swap = new Swap(tx.id + '-' + r.toString());
+    swap.transaction = tx.id;
+    swap.blockNumber = tx.blockNumber;
+    swap.method = 'MultiHopFill';
+    swap.fills = fillsToIds(fills);
+    swap.inputToken = inputToken.id;
+    swap.outputToken = outputToken.id;
+    swap.inputTokenAmount = fillData.sellAmount;
+    swap.outputTokenAmount = call.outputs.outputTokenAmount;
+    swap.taker = taker.id;
+    swap.save();
+
+    {
+        taker.swapCount = taker.swapCount.plus(BigInt.fromI32(1));
+        taker.save();
+    }
+
+    {
+        tx.lastSwap = swap.id;
         tx.save();
     }
 }
@@ -407,10 +466,9 @@ function findSellToUniswapEventFills(tx: Transaction, call: SellToUniswapCall): 
 }
 
 export function findSwapEventFills(tx: Transaction, logIndex: BigInt | null = null): Fill[] {
-    let txSwaps = tx.swaps;
     // Get the previous swap in this tx.
-    let prevSwap: Swap | null = txSwaps.length > 0
-        ? Swap.load(txSwaps[txSwaps.length - 1])
+    let prevSwap: Swap | null = tx.lastSwap
+        ? Swap.load(tx.lastSwap)
         : null;
     let txFills = tx.fills; // can't index directly
     let fills = [] as Fill[];

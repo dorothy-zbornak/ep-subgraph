@@ -9,6 +9,12 @@ export let EXCHANGE_PROXY_ADDRESS = Address.fromHexString('0xdef1c0ded9bec7f1a16
 export let SANDBOX_ADDRESS = Address.fromHexString('0x407b4128e9ecad8769b2332312a9f655cb9f5f3a') as Address;
 export let FLASH_WALLET_ADDRESS = Address.fromHexString('0x22f9dcf4647084d6c31b2765f6910cd85c178c18') as Address;
 
+Math.seedRandom(1337);
+
+export function getRandomNumber(): number {
+    return i32(Math.round(Math.random() * 1e9));
+}
+
 export function normalizeTokenAddress(token: Address): Address {
     if (token.toHexString() == '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee') {
         return WETH_ADDRESS;
@@ -60,17 +66,15 @@ export function isNullEthValue(value: string): boolean {
 }
 
 export function transactionFindOrCreate(txHash: Bytes, block: ethereum.Block): Transaction {
-    let transaction = Transaction.load(txHash.toHexString());
-    if (!transaction) {
-        transaction = new Transaction(txHash.toHexString());
-        transaction.timestamp = block.timestamp;
-        transaction.blockNumber = block.number;
-        transaction.fills = [];
-        transaction.nativeOrderFills = [];
-        transaction.swaps = [];
-        transaction.save();
+    let tx = Transaction.load(txHash.toHexString());
+    if (!tx) {
+        tx = new Transaction(txHash.toHexString());
+        tx.timestamp = block.timestamp;
+        tx.blockNumber = block.number;
+        tx.fills = [];
+        tx.save();
     }
-    return transaction!;
+    return tx!;
 }
 
 export function tokenFindOrCreate(address: Address): Token {
@@ -92,9 +96,7 @@ export function takerFindOrCreate(address: Address): Taker {
     if (!taker) {
         taker = new Taker(address.toHexString());
         taker.swapCount = BigInt.fromI32(0);
-        taker.swaps = [];
         taker.nativeOrderFillCount = BigInt.fromI32(0);
-        taker.nativeOrderFills = [];
         taker.save();
     }
     return taker!;
@@ -105,7 +107,6 @@ export function makerFindOrCreate(address: Address): Maker {
     if (!maker) {
         maker = new Maker(address.toHexString());
         maker.nativeOrderFillCount = BigInt.fromI32(0);
-        maker.nativeOrderFills = [];
         maker.save();
     }
     return maker!;

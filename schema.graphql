@@ -2,6 +2,8 @@ enum SwapMethod {
     TransformERC20
     UniswapVIP
     LiquidityProvider
+    BatchFill
+    MultiHopFill
 }
 
 enum NativeOrderType {
@@ -15,8 +17,9 @@ type Transaction @entity {
     blockNumber: BigInt!
     timestamp: BigInt!
     fills: [Fill!]!
-    nativeOrderFills: [NativeOrderFill!]!
-    swaps: [Swap!]!
+    nativeOrderFills: [NativeOrderFill!]! @derivedFrom(field: "transaction")
+    swaps: [Swap!]! @derivedFrom(field: "transaction")
+    lastSwap: Swap
 }
 
 type Token @entity {
@@ -34,15 +37,15 @@ type Taker @entity {
     id: ID!
     swapCount: BigInt!
     nativeOrderFillCount: BigInt!
-    swaps: [Swap!]!
-    nativeOrderFills: [NativeOrderFill!]!
+    swaps: [Swap!]! @derivedFrom(field: "taker")
+    nativeOrderFills: [NativeOrderFill!]! @derivedFrom(field: "taker")
 }
 
 type Maker @entity {
     # maker address
     id: ID!
     nativeOrderFillCount: BigInt!
-    nativeOrderFills: [NativeOrderFill!]!
+    nativeOrderFills: [NativeOrderFill!]! @derivedFrom(field: "maker")
 }
 
 type Fill @entity {
