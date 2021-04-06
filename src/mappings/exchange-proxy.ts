@@ -34,6 +34,7 @@ export function handleTransformedERC20Event(event: TransformedERC20): void {
 
     let swap = new Swap(tx.id + '-' + BigInt.fromI32(tx.swaps.length).toString());
     swap.transaction = tx.id;
+    swap.timestamp = tx.timestamp;
     swap.blockNumber = tx.blockNumber;
     swap.logIndex = event.logIndex;
     swap.method = 'TransformERC20';
@@ -80,6 +81,7 @@ export function handleSellToLiquidityProviderSwapEvent(event: LiquidityProviderS
         // If no fill event was found, create a fake one.
         let fill = new Fill(tx.id + '-' + event.params.provider.toHexString() + '-' + event.logIndex.toString());
         fill.transaction = tx.id;
+        fill.timestamp = tx.timestamp;
         fill.blockNumber = tx.blockNumber;
         fill.logIndex = event.logIndex;
         fill.source = 'LiquidityProvider';
@@ -97,6 +99,7 @@ export function handleSellToLiquidityProviderSwapEvent(event: LiquidityProviderS
     let swap = new Swap(tx.id + '-' + BigInt.fromI32(tx.swaps.length).toString());
     swap.transaction = tx.id;
     swap.blockNumber = tx.blockNumber;
+    swap.timestamp = tx.timestamp;
     swap.logIndex = event.logIndex;
     swap.method = 'LiquidityProvider';
     swap.fills = fillsToIds(fills);
@@ -140,6 +143,7 @@ export function handleRfqOrderFilledEvent(event: RfqOrderFilled): void {
 
     let fill = new Fill(tx.id + event.params.orderHash.toHex() + event.logIndex.toString());
     fill.transaction = tx.id;
+    fill.timestamp = tx.timestamp;
     fill.blockNumber = tx.blockNumber;
     fill.logIndex = event.logIndex;
     fill.source = 'RfqOrder';
@@ -155,6 +159,7 @@ export function handleRfqOrderFilledEvent(event: RfqOrderFilled): void {
         tx.id + '-' + event.params.orderHash.toHex() + '-' + event.logIndex.toString(),
     );
     nativeFill.transaction = tx.id;
+    nativeFill.timestamp = tx.timestamp;
     nativeFill.blockNumber = tx.blockNumber;
     nativeFill.type = 'RfqOrder';
     nativeFill.orderHash = event.params.orderHash;
@@ -212,6 +217,7 @@ export function handleLimitOrderFilledEvent(event: LimitOrderFilled): void {
     let fill = new Fill(tx.id + event.params.orderHash.toHex()  + event.logIndex.toString());
     fill.transaction = tx.id;
     fill.blockNumber = tx.blockNumber;
+    fill.timestamp = tx.timestamp;
     fill.logIndex = event.logIndex;
     fill.source = 'LimitOrder';
     fill.recipient = Bytes.fromHexString(taker.id) as Bytes;
@@ -227,6 +233,7 @@ export function handleLimitOrderFilledEvent(event: LimitOrderFilled): void {
     );
     nativeFill.transaction = tx.id;
     nativeFill.blockNumber = tx.blockNumber;
+    nativeFill.timestamp = tx.timestamp;
     nativeFill.type = 'LimitOrder';
     nativeFill.maker = maker.id;
     nativeFill.taker = taker.id;
@@ -290,6 +297,7 @@ export function handleSellToUniswapCall(call: SellToUniswapCall): void {
 
     let swap = new Swap(tx.id + '-' + BigInt.fromI32(tx.swaps.length).toString());
     swap.transaction = tx.id;
+    swap.timestamp = tx.timestamp;
     swap.blockNumber = tx.blockNumber;
     swap.method = 'UniswapVIP';
     swap.fills = fillsToIds(fills);
