@@ -26,16 +26,16 @@ export function handleUniswapV3Swap(event: Swap): void {
     let outputToken: Token;
     let inputTokenAmount: BigInt;
     let outputTokenAmount: BigInt;
-    if (event.params.amount0.lt(ZERO)) {
+    if (event.params.amount0.gt(ZERO)) {
         inputToken = info.token0 as Token;
         outputToken = info.token1 as Token;
-        inputTokenAmount = event.params.amount0.neg() as BigInt;
-        outputTokenAmount = event.params.amount1 as BigInt;
+        inputTokenAmount = event.params.amount0 as BigInt;
+        outputTokenAmount = event.params.amount1.neg() as BigInt;
     } else {
         inputToken = info.token1 as Token;
         outputToken = info.token0 as Token;
-        inputTokenAmount = event.params.amount1.neg() as BigInt;
-        outputTokenAmount = event.params.amount0 as BigInt;
+        inputTokenAmount = event.params.amount1 as BigInt;
+        outputTokenAmount = event.params.amount0.neg() as BigInt;
     }
 
     let fill = new Fill(tx.id + '-UniswapV3-' + event.logIndex.toString());

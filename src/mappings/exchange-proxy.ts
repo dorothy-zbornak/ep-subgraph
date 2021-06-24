@@ -310,12 +310,6 @@ export function handleSellToUniswapCall(call: SellToUniswapCall): void {
 export function handleSellEthForTokenToUniswapV3(call: SellEthForTokenToUniswapV3Call): void {
     log.debug('found sellEthForTokenToUniswapV3 swap in tx {}', [call.transaction.hash.toHex()]);
 
-    // Hack: Until call.value is exposed we can only handle calls direcrtly from
-    // an EOA (e.g., matcha use case) where transaction.value = call.value.
-    if (call.from != call.transaction.from) {
-        return;
-    }
-
     let tokenPath = decodeUniswapV3TokenPath(call.inputs.encodedPath);
     if (tokenPath.length < 2) {
         return;
@@ -329,10 +323,18 @@ export function handleSellEthForTokenToUniswapV3(call: SellEthForTokenToUniswapV
     }
     let taker = takerFindOrCreate(call.from);
 
+    // HACK: Currently call.value is not exposed and there is no `sellAmount` parameter
+    // for this function so for direct from EOA calls we can use `transaction.value`
+    // but for others we guess it by taking the inputTokenAmount from the first
+    // fill we found.
+    let inputAmount = call.transaction.value;
+    if (call.from != call.transaction.from) {
+        inputAmount = fills[0].inputTokenAmount;
+    }
+
     let inputToken = tokenFindOrCreate(tokenPath[0]);
     let outputToken = tokenFindOrCreate(tokenPath[tokenPath.length - 1]);
-    // HACK: No call.value exposed so we incorrectly use transaction.value.
-    inputToken.swapVolume = inputToken.swapVolume.plus(call.transaction.value);
+    inputToken.swapVolume = inputToken.swapVolume.plus(inputAmount);
     outputToken.swapVolume = outputToken.swapVolume.plus(call.outputs.buyAmount);
     inputToken.save();
     outputToken.save();
@@ -342,12 +344,12 @@ export function handleSellEthForTokenToUniswapV3(call: SellEthForTokenToUniswapV
     swap.transaction = tx.id;
     swap.timestamp = tx.timestamp;
     swap.blockNumber = tx.blockNumber;
-    swap.method = 'UniswapVIP';
+    swap.method = 'Uniswap3VIP';
     swap.fills = fillsToIds(fills);
     swap.inputToken = inputToken.id;
     swap.outputToken = outputToken.id;
     // HACK: No call.value exposed so we incorrectly use transaction.value.
-    swap.inputTokenAmount = call.transaction.value;
+    swap.inputTokenAmount = inputAmount;
     swap.outputTokenAmount = call.outputs.buyAmount;
     swap.taker = taker.id;
     swap.save();
@@ -391,7 +393,7 @@ export function handleSellTokenForEthToUniswapV3(call: SellTokenForEthToUniswapV
     swap.transaction = tx.id;
     swap.timestamp = tx.timestamp;
     swap.blockNumber = tx.blockNumber;
-    swap.method = 'UniswapVIP';
+    swap.method = 'Uniswap3VIP';
     swap.fills = fillsToIds(fills);
     swap.inputToken = inputToken.id;
     swap.outputToken = outputToken.id;
@@ -439,7 +441,7 @@ export function handleSellTokenForTokenToUniswapV3(call: SellTokenForTokenToUnis
     swap.transaction = tx.id;
     swap.timestamp = tx.timestamp;
     swap.blockNumber = tx.blockNumber;
-    swap.method = 'UniswapVIP';
+    swap.method = 'Uniswap3VIP';
     swap.fills = fillsToIds(fills);
     swap.inputToken = inputToken.id;
     swap.outputToken = outputToken.id;
@@ -681,7 +683,7 @@ function findSellToUniswapV3EventFills(tx: Transaction, tokenPath: Address[]): F
         }
     }
     // Oh well. 🤷
-    log.warning('could not find {} VIP fills for tx {}', ['UniswapV3', tx.id]);
+    log.warning('could not find {} VIP fills for tx {} ({} -> {})', ['UniswapV3', tx.id, inputToken, outputToken]);
     return [];
 }
 
